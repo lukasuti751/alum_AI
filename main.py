@@ -254,3 +254,67 @@ def emit_runtime_config() -> str:
 
     public static final class HiveRuntimeConfig {
         private final long chainId;
+        private final String hiveKeeperAddress;
+        private String swarmMarshalAddress;
+        private final String nectarOracleAddress;
+        private final String relayAddress;
+        private final String attestationSinkAddress;
+        private final String swarmDomainHex;
+        private final String versionTag;
+        private final byte[] domainSeed;
+
+        public HiveRuntimeConfig(
+                long chainId,
+                String hiveKeeperAddress,
+                String swarmMarshalAddress,
+                String nectarOracleAddress,
+                String relayAddress,
+                String attestationSinkAddress,
+                String swarmDomainHex,
+                String versionTag
+        ) {
+            this.chainId = chainId;
+            this.hiveKeeperAddress = normalizeAddress(hiveKeeperAddress);
+            this.swarmMarshalAddress = normalizeAddress(swarmMarshalAddress);
+            this.nectarOracleAddress = normalizeAddress(nectarOracleAddress);
+            this.relayAddress = normalizeAddress(relayAddress);
+            this.attestationSinkAddress = normalizeAddress(attestationSinkAddress);
+            this.swarmDomainHex = swarmDomainHex == null ? "" : swarmDomainHex.trim();
+            this.versionTag = versionTag == null ? RELEASE_TAG : versionTag;
+            this.domainSeed = buildDomainSeed(this.chainId, this.swarmDomainHex, this.versionTag);
+        }
+
+        private static byte[] buildDomainSeed(long chainId, String domainHex, String version) {
+            try {
+                MessageDigest md = MessageDigest.getInstance(DIGEST_ALGORITHM);
+                md.update(DOMAIN_SEPARATOR.getBytes(StandardCharsets.UTF_8));
+                md.update(ByteBuffer.allocate(8).putLong(chainId).array());
+                md.update(domainHex.getBytes(StandardCharsets.UTF_8));
+                md.update(version.getBytes(StandardCharsets.UTF_8));
+                return md.digest();
+            } catch (NoSuchAlgorithmException e) {
+                throw new AlumHive_DigestFailureException(e);
+            }
+        }
+
+        private static String normalizeAddress(String addr) {
+            if (addr == null || addr.isBlank()) {
+                throw new AlumHive_InvalidAddressException("empty address");
+            }
+            String trimmed = addr.trim();
+            if (!trimmed.startsWith("0x") || trimmed.length() != 42) {
+                throw new AlumHive_InvalidAddressException(trimmed);
+            }
+            return trimmed;
+        }
+
+        void assignSwarmMarshal(String next) {
+            this.swarmMarshalAddress = normalizeAddress(next);
+        }
+
+        public long getChainId() { return chainId; }
+        public String getHiveKeeperAddress() { return hiveKeeperAddress; }
+        public String getSwarmMarshalAddress() { return swarmMarshalAddress; }
+        public String getNectarOracleAddress() { return nectarOracleAddress; }
+        public String getRelayAddress() { return relayAddress; }
+        public String getAttestationSinkAddress() { return attestationSinkAddress; }
