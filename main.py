@@ -446,3 +446,67 @@ def emit_swarm_node_registry() -> str:
             return m;
         }
     }
+
+    public static final class SwarmNodeRegistry {
+        private final int capacity;
+        private final AtomicLong idSeq = new AtomicLong(0L);
+        private final Map<Long, SwarmNode> nodes = new ConcurrentHashMap<>();
+
+        public SwarmNodeRegistry(int capacity) {
+            this.capacity = Math.max(1, capacity);
+        }
+
+        public int size() { return nodes.size(); }
+        public int getCapacity() { return capacity; }
+
+        public long enlist(String alias, String operatorAddress, SwarmNodeTier tier, int computeWeight) {
+            if (nodes.size() >= capacity) {
+                throw new AlumHive_CapacityExceededException("swarm nodes");
+            }
+            long id = idSeq.incrementAndGet();
+            SwarmNode node = new SwarmNode(id, alias, operatorAddress, tier, computeWeight);
+            nodes.put(id, node);
+            return id;
+        }
+
+        public SwarmNode requireNode(long nodeId) {
+            SwarmNode node = nodes.get(nodeId);
+            if (node == null) {
+                throw new AlumHive_NotFoundException("node:" + nodeId);
+            }
+            return node;
+        }
+
+        public Optional<SwarmNode> get(long nodeId) {
+            return Optional.ofNullable(nodes.get(nodeId));
+        }
+
+        public void heartbeat(long nodeId, long epoch) {
+            requireNode(nodeId).touchHeartbeat(epoch);
+        }
+
+        public void quarantine(long nodeId, String actorAddress) {
+            SwarmNode node = requireNode(nodeId);
+            node.setStatus(SwarmNodeStatus.QUARANTINED);
+        }
+
+        public void retire(long nodeId) {
+            SwarmNode node = requireNode(nodeId);
+            node.setStatus(SwarmNodeStatus.RETIRED);
+        }
+
+        public List<SwarmNode> listByTier(SwarmNodeTier tier) {
+            return nodes.values().stream()
+                    .filter(n -> n.getTier() == tier && n.getStatus() != SwarmNodeStatus.RETIRED)
+                    .sorted(Comparator.comparingLong(SwarmNode::getNodeId))
+                    .collect(Collectors.toList());
+        }
+
+        public Map<Long, SwarmNode> snapshot() {
+            return Collections.unmodifiableMap(new TreeMap<>(nodes));
+        }
+
+        public int totalActiveWeight() {
+            return nodes.values().stream()
+                    .filter(n -> n.getStatus() != SwarmNodeStatus.RETIRED && n.getStatus() != SwarmNodeStatus.QUARANTINED)
+                    .mapToInt(SwarmNode::getComputeWeight)
