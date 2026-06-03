@@ -190,3 +190,67 @@ public final class alum__AI {{
         String candidate = pendingSwarmMarshal.get();
         if (candidate == null) {{
             throw new AlumHive_NoPendingMarshalException();
+        }}
+        hiveValidator.requireAddressMatch(actorAddress, candidate);
+        runtimeConfig.assignSwarmMarshal(candidate);
+        pendingSwarmMarshal.set(null);
+        hiveLedger.append(new HiveEvent("MarshalAccepted", actorAddress, hiveEpoch.get(), Instant.now(),
+                Map.of("marshal", candidate)));
+    }}
+
+    public long tickHiveEpoch() {{
+        long next = hiveEpoch.incrementAndGet();
+        hiveMetricsRing.recordGauge("hiveEpoch", next);
+        return next;
+    }}
+
+    public long currentHiveEpoch() {{ return hiveEpoch.get(); }}
+    public Instant getBootInstant() {{ return bootInstant; }}
+
+    public void requireActiveGrid() {{
+        if (gridFrozen.get()) {{
+            throw new AlumHive_GridFrozenException();
+        }}
+    }}
+
+    public String computeHiveDigest(String swarmTag, String thoughtKey, byte[] payload) {{
+        try {{
+            MessageDigest md = MessageDigest.getInstance(DIGEST_ALGORITHM);
+            md.update(runtimeConfig.getDomainSeed());
+            md.update(swarmTag.getBytes(StandardCharsets.UTF_8));
+            md.update(thoughtKey.getBytes(StandardCharsets.UTF_8));
+            if (payload != null) {{
+                md.update(payload);
+            }}
+            return "0x" + HexFormat.of().formatHex(md.digest());
+        }} catch (NoSuchAlgorithmException e) {{
+            throw new AlumHive_DigestFailureException(e);
+        }}
+    }}
+
+    public Map<String, Object> buildHealthSnapshot() {{
+        Map<String, Object> snap = new LinkedHashMap<>();
+        snap.put("engine", ENGINE_LABEL);
+        snap.put("release", RELEASE_TAG);
+        snap.put("chainId", runtimeConfig.getChainId());
+        snap.put("hiveEpoch", hiveEpoch.get());
+        snap.put("gridFrozen", gridFrozen.get());
+        snap.put("swarmNodes", swarmNodeRegistry.size());
+        snap.put("thoughts", thoughtPool.size());
+        snap.put("trails", pheromoneTrailIndex.size());
+        snap.put("openQuorums", consensusMesh.openRoundCount());
+        snap.put("spores", memorySporeVault.size());
+        snap.put("pendingTasks", swarmScheduler.pendingCount());
+        snap.put("bootUtc", bootInstant.toString());
+        snap.put("metricSamples", hiveMetricsRing.sampleCount());
+        return snap;
+    }}
+'''
+
+
+def emit_runtime_config() -> str:
+    return '''
+    // --- Runtime configuration (constructor-injected final fields) ---
+
+    public static final class HiveRuntimeConfig {
+        private final long chainId;
