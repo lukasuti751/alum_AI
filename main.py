@@ -126,3 +126,67 @@ public final class alum__AI {{
         this.consensusMesh = new ConsensusMesh(MAX_QUORUM_ROUNDS, MIN_QUORUM_WEIGHT, MAX_QUORUM_WEIGHT);
         this.memorySporeVault = new MemorySporeVault(MAX_SPORE_FRAGMENTS);
         this.swarmScheduler = new SwarmScheduler(MAX_TASK_QUEUE);
+        this.attestationRelay = new AttestationRelay(runtimeConfig);
+        this.hiveLedger = new HiveLedger();
+        this.hiveMetricsRing = new HiveMetricsRing(METRIC_RING_CAP);
+        this.hiveValidator = new HiveValidator();
+        this.hiveReportEmitter = new HiveReportEmitter();
+        this.gridFrozen = new AtomicBoolean(false);
+        this.hiveEpoch = new AtomicLong(0L);
+        this.pendingSwarmMarshal = new AtomicReference<>(null);
+        this.bootInstant = Instant.now();
+    }}
+
+    public static alum__AI bootstrapDefault() {{
+        HiveRuntimeConfig cfg = new HiveRuntimeConfig(
+                DEFAULT_CHAIN_ID,
+                ADDRESS_A,
+                ADDRESS_B,
+                ADDRESS_C,
+                ADDRESS_D,
+                ADDRESS_E,
+                SWARM_DOMAIN_HEX,
+                RELEASE_TAG
+        );
+        return new alum__AI(cfg);
+    }}
+
+    public HiveRuntimeConfig getRuntimeConfig() {{ return runtimeConfig; }}
+    public SwarmNodeRegistry nodes() {{ return swarmNodeRegistry; }}
+    public ThoughtPool thoughts() {{ return thoughtPool; }}
+    public PheromoneTrailIndex trails() {{ return pheromoneTrailIndex; }}
+    public ConsensusMesh quorum() {{ return consensusMesh; }}
+    public MemorySporeVault spores() {{ return memorySporeVault; }}
+    public SwarmScheduler scheduler() {{ return swarmScheduler; }}
+    public AttestationRelay attestation() {{ return attestationRelay; }}
+    public HiveLedger ledger() {{ return hiveLedger; }}
+    public HiveMetricsRing metrics() {{ return hiveMetricsRing; }}
+    public HiveValidator validator() {{ return hiveValidator; }}
+    public HiveReportEmitter reports() {{ return hiveReportEmitter; }}
+
+    public boolean isGridFrozen() {{ return gridFrozen.get(); }}
+
+    public void setGridFrozen(boolean frozen, String actorAddress) {{
+        hiveValidator.requireHiveKeeper(actorAddress, runtimeConfig.getHiveKeeperAddress());
+        gridFrozen.set(frozen);
+        hiveLedger.append(new HiveEvent(
+                frozen ? "GridFrozen" : "GridThawed",
+                actorAddress,
+                hiveEpoch.get(),
+                Instant.now(),
+                Map.of("release", RELEASE_TAG)
+        ));
+    }}
+
+    public void proposeSwarmMarshal(String nextMarshal, String actorAddress) {{
+        hiveValidator.requireHiveKeeper(actorAddress, runtimeConfig.getHiveKeeperAddress());
+        hiveValidator.requireValidAddress(nextMarshal);
+        pendingSwarmMarshal.set(nextMarshal.trim());
+        hiveLedger.append(new HiveEvent("MarshalPending", actorAddress, hiveEpoch.get(), Instant.now(),
+                Map.of("candidate", nextMarshal)));
+    }}
+
+    public void acceptSwarmMarshal(String actorAddress) {{
+        String candidate = pendingSwarmMarshal.get();
+        if (candidate == null) {{
+            throw new AlumHive_NoPendingMarshalException();
