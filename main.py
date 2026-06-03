@@ -318,3 +318,67 @@ def emit_runtime_config() -> str:
         public String getNectarOracleAddress() { return nectarOracleAddress; }
         public String getRelayAddress() { return relayAddress; }
         public String getAttestationSinkAddress() { return attestationSinkAddress; }
+        public String getSwarmDomainHex() { return swarmDomainHex; }
+        public String getVersionTag() { return versionTag; }
+        public byte[] getDomainSeed() { return Arrays.copyOf(domainSeed, domainSeed.length); }
+    }
+'''
+
+
+def emit_exceptions() -> str:
+    return '''
+    // --- Domain exceptions ---
+
+    public static class AlumHive_GridFrozenException extends RuntimeException {
+        public AlumHive_GridFrozenException() { super("AlumHive: grid frozen"); }
+    }
+
+    public static class AlumHive_CapacityExceededException extends RuntimeException {
+        public AlumHive_CapacityExceededException(String detail) {
+            super("AlumHive: capacity exceeded — " + detail);
+        }
+    }
+
+    public static class AlumHive_NotFoundException extends RuntimeException {
+        public AlumHive_NotFoundException(String id) {
+            super("AlumHive: record not found — " + id);
+        }
+    }
+
+    public static class AlumHive_InvalidAddressException extends RuntimeException {
+        public AlumHive_InvalidAddressException(String addr) {
+            super("AlumHive: invalid address — " + addr);
+        }
+    }
+
+    public static class AlumHive_UnauthorizedException extends RuntimeException {
+        public AlumHive_UnauthorizedException(String role) {
+            super("AlumHive: unauthorized — " + role);
+        }
+    }
+
+    public static class AlumHive_DigestFailureException extends RuntimeException {
+        public AlumHive_DigestFailureException(Throwable cause) {
+            super("AlumHive: digest failure", cause);
+        }
+    }
+
+    public static class AlumHive_QuorumNotReachedException extends RuntimeException {
+        public AlumHive_QuorumNotReachedException(long roundId) {
+            super("AlumHive: quorum not reached — round " + roundId);
+        }
+    }
+
+    public static class AlumHive_NoPendingMarshalException extends RuntimeException {
+        public AlumHive_NoPendingMarshalException() {
+            super("AlumHive: no pending swarm marshal");
+        }
+    }
+
+    public static class AlumHive_TrailExpiredException extends RuntimeException {
+        public AlumHive_TrailExpiredException(long trailId) {
+            super("AlumHive: pheromone trail expired — " + trailId);
+        }
+    }
+'''
+
