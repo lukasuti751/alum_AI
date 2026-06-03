@@ -382,3 +382,67 @@ def emit_exceptions() -> str:
     }
 '''
 
+
+def emit_swarm_node_registry() -> str:
+    return '''
+    // --- Swarm node registry ---
+
+    public enum SwarmNodeTier {
+        SCOUT, WORKER, SYNTHESIZER, ORACLE_LIAISON
+    }
+
+    public enum SwarmNodeStatus {
+        IDLE, BUSY, QUARANTINED, RETIRED
+    }
+
+    public static final class SwarmNode {
+        private final long nodeId;
+        private final String alias;
+        private final String operatorAddress;
+        private final SwarmNodeTier tier;
+        private final int computeWeight;
+        private final Instant enlistedAt;
+        private SwarmNodeStatus status;
+        private long lastHeartbeatEpoch;
+        private final Set<Long> boundThoughtIds;
+
+        public SwarmNode(long nodeId, String alias, String operatorAddress, SwarmNodeTier tier, int computeWeight) {
+            this.nodeId = nodeId;
+            this.alias = alias == null ? "node-" + nodeId : alias;
+            this.operatorAddress = operatorAddress;
+            this.tier = tier == null ? SwarmNodeTier.WORKER : tier;
+            this.computeWeight = Math.max(1, Math.min(64, computeWeight));
+            this.enlistedAt = Instant.now();
+            this.status = SwarmNodeStatus.IDLE;
+            this.lastHeartbeatEpoch = 0L;
+            this.boundThoughtIds = new LinkedHashSet<>();
+        }
+
+        public long getNodeId() { return nodeId; }
+        public String getAlias() { return alias; }
+        public String getOperatorAddress() { return operatorAddress; }
+        public SwarmNodeTier getTier() { return tier; }
+        public int getComputeWeight() { return computeWeight; }
+        public Instant getEnlistedAt() { return enlistedAt; }
+        public SwarmNodeStatus getStatus() { return status; }
+        public long getLastHeartbeatEpoch() { return lastHeartbeatEpoch; }
+        public Set<Long> getBoundThoughtIds() { return Collections.unmodifiableSet(boundThoughtIds); }
+
+        void setStatus(SwarmNodeStatus status) { this.status = status; }
+        void touchHeartbeat(long epoch) { this.lastHeartbeatEpoch = epoch; }
+        void bindThought(long thoughtId) { boundThoughtIds.add(thoughtId); }
+        void unbindThought(long thoughtId) { boundThoughtIds.remove(thoughtId); }
+
+        public Map<String, Object> toMap() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("nodeId", nodeId);
+            m.put("alias", alias);
+            m.put("operator", operatorAddress);
+            m.put("tier", tier.name());
+            m.put("weight", computeWeight);
+            m.put("status", status.name());
+            m.put("heartbeatEpoch", lastHeartbeatEpoch);
+            m.put("thoughtBindings", boundThoughtIds.size());
+            return m;
+        }
+    }
