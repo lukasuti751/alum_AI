@@ -62,3 +62,67 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+
+/**
+ * Off-chain hive-mind engine: swarm node registry, pheromone routing, thought pools,
+ * quorum ballots, spore memory vault, and EVM attestation relay for alum__AI deployments.
+ */
+public final class alum__AI {{
+
+    public static final String ENGINE_LABEL = "alum__AI";
+    public static final String RELEASE_TAG = "nectar-quorum-v3.7";
+    public static final int MAX_SWARM_NODES = 768;
+    public static final int MAX_THOUGHT_SLOTS = 4096;
+    public static final int MAX_PHEROMONE_TRAILS = 2048;
+    public static final int MAX_QUORUM_ROUNDS = 512;
+    public static final int MAX_SPORE_FRAGMENTS = 1024;
+    public static final int MAX_TASK_QUEUE = 256;
+    public static final int METRIC_RING_CAP = 8192;
+    public static final int ATTESTATION_TTL_SECONDS = 172800;
+    public static final int REWARD_BASIS_POINTS = 63;
+    public static final long BPS_DENOM = 10_000L;
+    public static final long DEFAULT_CHAIN_ID = 1L;
+    public static final String DOMAIN_SEPARATOR = "alum__AI_nectar_quorum_v3";
+    public static final String DIGEST_ALGORITHM = "SHA-256";
+    public static final int MIN_QUORUM_WEIGHT = 3;
+    public static final int MAX_QUORUM_WEIGHT = 97;
+
+    public static final String ADDRESS_A = "{ADDRESS_A}";
+    public static final String ADDRESS_B = "{ADDRESS_B}";
+    public static final String ADDRESS_C = "{ADDRESS_C}";
+    public static final String ADDRESS_D = "{ADDRESS_D}";
+    public static final String ADDRESS_E = "{ADDRESS_E}";
+    public static final String ADDRESS_F = "{ADDRESS_F}";
+    public static final String ADDRESS_G = "{ADDRESS_G}";
+    public static final String ADDRESS_H = "{ADDRESS_H}";
+    public static final String SWARM_DOMAIN_HEX = "{SWARM_DOMAIN_HEX}";
+    public static final String PHEROMONE_SALT_HEX = "{PHEROMONE_SALT}";
+    public static final String MESH_SEED_HEX = "{MESH_SEED_HEX}";
+    public static final String QUORUM_ANCHOR_HEX = "{QUORUM_ANCHOR_HEX}";
+
+    private final HiveRuntimeConfig runtimeConfig;
+    private final SwarmNodeRegistry swarmNodeRegistry;
+    private final ThoughtPool thoughtPool;
+    private final PheromoneTrailIndex pheromoneTrailIndex;
+    private final ConsensusMesh consensusMesh;
+    private final MemorySporeVault memorySporeVault;
+    private final SwarmScheduler swarmScheduler;
+    private final AttestationRelay attestationRelay;
+    private final HiveLedger hiveLedger;
+    private final HiveMetricsRing hiveMetricsRing;
+    private final HiveValidator hiveValidator;
+    private final HiveReportEmitter hiveReportEmitter;
+    private final AtomicBoolean gridFrozen;
+    private final AtomicLong hiveEpoch;
+    private final AtomicReference<String> pendingSwarmMarshal;
+    private final Instant bootInstant;
+
+    public alum__AI(HiveRuntimeConfig runtimeConfig) {{
+        this.runtimeConfig = Objects.requireNonNull(runtimeConfig, "runtimeConfig");
+        this.swarmNodeRegistry = new SwarmNodeRegistry(MAX_SWARM_NODES);
+        this.thoughtPool = new ThoughtPool(MAX_THOUGHT_SLOTS);
+        this.pheromoneTrailIndex = new PheromoneTrailIndex(MAX_PHEROMONE_TRAILS);
+        this.consensusMesh = new ConsensusMesh(MAX_QUORUM_ROUNDS, MIN_QUORUM_WEIGHT, MAX_QUORUM_WEIGHT);
+        this.memorySporeVault = new MemorySporeVault(MAX_SPORE_FRAGMENTS);
+        this.swarmScheduler = new SwarmScheduler(MAX_TASK_QUEUE);
