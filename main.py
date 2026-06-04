@@ -958,3 +958,67 @@ def emit_spore_vault() -> str:
             long id = idSeq.incrementAndGet();
             spores.put(id, new SporeFragment(id, lineageTag, payloadDigest, depositorAddress, boundThoughtId));
             return id;
+        }
+
+        public SporeFragment requireSpore(long sporeId) {
+            SporeFragment s = spores.get(sporeId);
+            if (s == null) {
+                throw new AlumHive_NotFoundException("spore:" + sporeId);
+            }
+            return s;
+        }
+
+        public void propagate(long sporeId) {
+            requireSpore(sporeId).markPropagated();
+        }
+
+        public List<SporeFragment> listByLineage(String lineageTag) {
+            return spores.values().stream()
+                    .filter(s -> s.getLineageTag().equals(lineageTag))
+                    .collect(Collectors.toList());
+        }
+
+        public long countPropagated() {
+            return spores.values().stream().filter(SporeFragment::isPropagated).count();
+        }
+    }
+'''
+
+
+def emit_scheduler() -> str:
+    return '''
+    // --- Swarm task scheduler ---
+
+    public enum SwarmTaskStatus {
+        QUEUED, DISPATCHED, COMPLETED, ABORTED
+    }
+
+    public static final class SwarmTask {
+        private final long taskId;
+        private final String taskDigest;
+        private final long assignedNodeId;
+        private final String requesterAddress;
+        private final int priority;
+        private final Instant enqueuedAt;
+        private SwarmTaskStatus status;
+        private Instant completedAt;
+
+        public SwarmTask(long taskId, String taskDigest, long assignedNodeId, String requesterAddress, int priority) {
+            this.taskId = taskId;
+            this.taskDigest = taskDigest;
+            this.assignedNodeId = assignedNodeId;
+            this.requesterAddress = requesterAddress;
+            this.priority = Math.max(0, Math.min(9, priority));
+            this.enqueuedAt = Instant.now();
+            this.status = SwarmTaskStatus.QUEUED;
+            this.completedAt = null;
+        }
+
+        public long getTaskId() { return taskId; }
+        public String getTaskDigest() { return taskDigest; }
+        public long getAssignedNodeId() { return assignedNodeId; }
+        public String getRequesterAddress() { return requesterAddress; }
+        public int getPriority() { return priority; }
+        public Instant getEnqueuedAt() { return enqueuedAt; }
+        public SwarmTaskStatus getStatus() { return status; }
+        public Instant getCompletedAt() { return completedAt; }
