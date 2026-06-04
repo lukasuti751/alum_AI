@@ -830,3 +830,67 @@ def emit_consensus() -> str:
         private final Map<Long, QuorumBallot> rounds = new ConcurrentHashMap<>();
 
         public ConsensusMesh(int capacity, int minWeight, int maxWeight) {
+            this.capacity = Math.max(1, capacity);
+            this.minWeight = minWeight;
+            this.maxWeight = maxWeight;
+        }
+
+        public long openRound(String proposalDigest, String proposerAddress, int requiredWeight) {
+            if (rounds.size() >= capacity) {
+                throw new AlumHive_CapacityExceededException("quorum rounds");
+            }
+            int clamped = Math.max(minWeight, Math.min(maxWeight, requiredWeight));
+            long id = idSeq.incrementAndGet();
+            rounds.put(id, new QuorumBallot(id, proposalDigest, proposerAddress, clamped));
+            return id;
+        }
+
+        public QuorumBallot requireRound(long roundId) {
+            QuorumBallot b = rounds.get(roundId);
+            if (b == null) {
+                throw new AlumHive_NotFoundException("round:" + roundId);
+            }
+            return b;
+        }
+
+        public void castVote(long roundId, String voterAddress, int weight, SwarmNodeRegistry registry) {
+            QuorumBallot ballot = requireRound(roundId);
+            SwarmNode node = registry.listByTier(SwarmNodeTier.WORKER).stream()
+                    .filter(n -> n.getOperatorAddress().equalsIgnoreCase(voterAddress))
+                    .findFirst()
+                    .orElse(null);
+            int effectiveWeight = node != null ? node.getComputeWeight() : Math.max(1, weight);
+            ballot.castVote(voterAddress, effectiveWeight);
+        }
+
+        public void requireReached(long roundId) {
+            QuorumBallot b = requireRound(roundId);
+            if (b.getStatus() != QuorumRoundStatus.REACHED && b.getStatus() != QuorumRoundStatus.SEALED) {
+                throw new AlumHive_QuorumNotReachedException(roundId);
+            }
+        }
+
+        public void sealRound(long roundId) {
+            requireRound(roundId).seal();
+        }
+
+        public int openRoundCount() {
+            return (int) rounds.values().stream()
+                    .filter(r -> r.getStatus() == QuorumRoundStatus.OPEN)
+                    .count();
+        }
+
+        public List<QuorumBallot> listOpen() {
+            return rounds.values().stream()
+                    .filter(r -> r.getStatus() == QuorumRoundStatus.OPEN)
+                    .collect(Collectors.toList());
+        }
+    }
+'''
+
+
+def emit_spore_vault() -> str:
+    return '''
+    // --- Memory spore vault ---
+
+    public static final class SporeFragment {
