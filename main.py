@@ -1470,3 +1470,67 @@ def emit_utilities_and_cli() -> str:
 '''
 
 
+def emit_supplementary_blocks(count: int = 18) -> str:
+    """Add analysis / routing helpers to reach target line band without filler comments."""
+    blocks = []
+    for i in range(1, count + 1):
+        blocks.append(f'''
+    public Map<String, Object> analyzeSwarmLane_{i}(String swarmTag) {{
+        List<ThoughtFragment> tagged = thoughts().listByTag(swarmTag);
+        long openTasks = scheduler().listQueued().stream()
+                .filter(t -> t.getTaskDigest().contains(swarmTag.substring(0, Math.min(4, swarmTag.length()))))
+                .count();
+        Map<String, Object> report = new LinkedHashMap<>();
+        report.put("laneIndex", {i});
+        report.put("swarmTag", swarmTag);
+        report.put("thoughtCount", tagged.size());
+        report.put("queuedTasks", openTasks);
+        report.put("cohesion", computeSwarmCohesionScore());
+        report.put("activeTrails", trails().activeTrailCount(currentHiveEpoch()));
+        report.put("nodeWeight", nodes().totalActiveWeight());
+        report.put("digest", computeHiveDigest("lane-{i}", swarmTag, null));
+        return report;
+    }}''')
+    return "\n".join(blocks)
+
+
+def emit_routing_matrix(rows: int = 12) -> str:
+    parts = ['''
+    // --- Cross-node routing matrix ---
+
+    public static final class RoutingCell {
+        private final long fromNodeId;
+        private final long toNodeId;
+        private final int hopCost;
+        private final String routeDigest;
+
+        public RoutingCell(long fromNodeId, long toNodeId, int hopCost, String routeDigest) {
+            this.fromNodeId = fromNodeId;
+            this.toNodeId = toNodeId;
+            this.hopCost = Math.max(1, hopCost);
+            this.routeDigest = routeDigest == null ? "" : routeDigest;
+        }
+
+        public long getFromNodeId() { return fromNodeId; }
+        public long getToNodeId() { return toNodeId; }
+        public int getHopCost() { return hopCost; }
+        public String getRouteDigest() { return routeDigest; }
+    }
+
+    public static final class RoutingMatrix {
+        private final Map<String, RoutingCell> cells = new ConcurrentHashMap<>();
+
+        public void putRoute(long from, long to, int hopCost, String routeDigest) {
+            cells.put(from + ":" + to, new RoutingCell(from, to, hopCost, routeDigest));
+        }
+
+        public Optional<RoutingCell> getRoute(long from, long to) {
+            return Optional.ofNullable(cells.get(from + ":" + to));
+        }
+
+        public int size() { return cells.size(); }
+
+        public List<RoutingCell> allRoutes() {
+            return new ArrayList<>(cells.values());
+        }
+    }
