@@ -1534,3 +1534,43 @@ def emit_routing_matrix(rows: int = 12) -> str:
             return new ArrayList<>(cells.values());
         }
     }
+
+    private final RoutingMatrix routingMatrix = new RoutingMatrix();
+
+    public RoutingMatrix routing() { return routingMatrix; }
+''']
+    for r in range(rows):
+        parts.append(f'''
+    public void wireDefaultRoute_{r}(long fromNode, long toNode) {{
+        String digest = sha256Hex("route-{r}-" + fromNode + "-" + toNode);
+        routingMatrix.putRoute(fromNode, toNode, {3 + (r % 11)}, digest);
+        trails().layTrail(fromNode, toNode, digest, {90 + (r * 7) % 120}, currentHiveEpoch() + {24 + r * 3});
+    }}''')
+    return "\n".join(parts)
+
+
+def main() -> None:
+    chunks = [
+        HEADER,
+        emit_runtime_config(),
+        emit_exceptions(),
+        emit_swarm_node_registry(),
+        emit_thought_pool(),
+        emit_pheromone(),
+        emit_consensus(),
+        emit_spore_vault(),
+        emit_scheduler(),
+        emit_support_classes(),
+        emit_routing_matrix(14),
+        emit_supplementary_blocks(22),
+        emit_utilities_and_cli(),
+        "}\n",
+    ]
+    content = "".join(chunks)
+    OUT.write_text(content, encoding="utf-8")
+    line_count = content.count("\n") + (0 if content.endswith("\n") else 1)
+    print(f"Wrote {OUT} ({line_count} lines)")
+
+
+if __name__ == "__main__":
+    main()
