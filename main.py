@@ -638,3 +638,67 @@ def emit_thought_pool() -> str:
                     .sorted(Comparator.comparingLong(ThoughtFragment::getThoughtId))
                     .collect(Collectors.toList());
         }
+    }
+'''
+
+
+def emit_pheromone() -> str:
+    return '''
+    // --- Pheromone trail index (signal routing) ---
+
+    public static final class PheromoneTrail {
+        private final long trailId;
+        private final long sourceNodeId;
+        private final long targetNodeId;
+        private final String signalDigest;
+        private final int intensity;
+        private final Instant laidAt;
+        private final long expiryEpoch;
+        private boolean evaporated;
+
+        public PheromoneTrail(
+                long trailId,
+                long sourceNodeId,
+                long targetNodeId,
+                String signalDigest,
+                int intensity,
+                long expiryEpoch
+        ) {
+            this.trailId = trailId;
+            this.sourceNodeId = sourceNodeId;
+            this.targetNodeId = targetNodeId;
+            this.signalDigest = signalDigest == null ? "" : signalDigest;
+            this.intensity = Math.max(1, Math.min(255, intensity));
+            this.laidAt = Instant.now();
+            this.expiryEpoch = expiryEpoch;
+            this.evaporated = false;
+        }
+
+        public long getTrailId() { return trailId; }
+        public long getSourceNodeId() { return sourceNodeId; }
+        public long getTargetNodeId() { return targetNodeId; }
+        public String getSignalDigest() { return signalDigest; }
+        public int getIntensity() { return intensity; }
+        public Instant getLaidAt() { return laidAt; }
+        public long getExpiryEpoch() { return expiryEpoch; }
+        public boolean isEvaporated() { return evaporated; }
+
+        void evaporate() { this.evaporated = true; }
+
+        public boolean isExpired(long currentEpoch) {
+            return evaporated || currentEpoch > expiryEpoch;
+        }
+
+        public Map<String, Object> toMap() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("trailId", trailId);
+            m.put("from", sourceNodeId);
+            m.put("to", targetNodeId);
+            m.put("signal", signalDigest);
+            m.put("intensity", intensity);
+            m.put("expiryEpoch", expiryEpoch);
+            m.put("evaporated", evaporated);
+            return m;
+        }
+    }
+
