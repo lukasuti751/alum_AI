@@ -574,3 +574,67 @@ def emit_thought_pool() -> str:
             m.put("phase", phase.name());
             m.put("refinement", refinementScore);
             m.put("upstream", upstreamThoughtIds);
+            return m;
+        }
+    }
+
+    public static final class ThoughtPool {
+        private final int capacity;
+        private final AtomicLong idSeq = new AtomicLong(0L);
+        private final Map<Long, ThoughtFragment> fragments = new ConcurrentHashMap<>();
+        private final Map<String, List<Long>> bySwarmTag = new ConcurrentHashMap<>();
+
+        public ThoughtPool(int capacity) {
+            this.capacity = Math.max(1, capacity);
+        }
+
+        public int size() { return fragments.size(); }
+
+        public long deposit(String swarmTag, String contentDigest, String authorAddress, List<Long> upstream) {
+            if (fragments.size() >= capacity) {
+                throw new AlumHive_CapacityExceededException("thought pool");
+            }
+            long id = idSeq.incrementAndGet();
+            ThoughtFragment frag = new ThoughtFragment(id, swarmTag, contentDigest, authorAddress, upstream);
+            fragments.put(id, frag);
+            bySwarmTag.computeIfAbsent(swarmTag, k -> new CopyOnWriteArrayList<>()).add(id);
+            return id;
+        }
+
+        public ThoughtFragment requireThought(long thoughtId) {
+            ThoughtFragment f = fragments.get(thoughtId);
+            if (f == null) {
+                throw new AlumHive_NotFoundException("thought:" + thoughtId);
+            }
+            return f;
+        }
+
+        public void refine(long thoughtId, int scoreDelta) {
+            ThoughtFragment f = requireThought(thoughtId);
+            f.addRefinement(scoreDelta);
+            if (f.getRefinementScore() >= 120) {
+                f.advancePhase(ThoughtPhase.REFINED);
+            }
+            if (f.getRefinementScore() >= 480) {
+                f.advancePhase(ThoughtPhase.CONSENSUS_READY);
+            }
+        }
+
+        public void archive(long thoughtId) {
+            requireThought(thoughtId).advancePhase(ThoughtPhase.ARCHIVED);
+        }
+
+        public List<ThoughtFragment> listByTag(String swarmTag) {
+            List<Long> ids = bySwarmTag.getOrDefault(swarmTag, List.of());
+            return ids.stream()
+                    .map(fragments::get)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+        }
+
+        public List<ThoughtFragment> listConsensusReady() {
+            return fragments.values().stream()
+                    .filter(f -> f.getPhase() == ThoughtPhase.CONSENSUS_READY)
+                    .sorted(Comparator.comparingLong(ThoughtFragment::getThoughtId))
+                    .collect(Collectors.toList());
+        }
