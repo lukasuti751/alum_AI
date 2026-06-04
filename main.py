@@ -1150,3 +1150,67 @@ def emit_support_classes() -> str:
         private final long expiryEpoch;
         private boolean revoked;
 
+        public AttestationRecord(String digestHex, String attesterAddress, long expiryEpoch) {
+            this.digestHex = digestHex;
+            this.attesterAddress = attesterAddress;
+            this.attestedAt = Instant.now();
+            this.expiryEpoch = expiryEpoch;
+            this.revoked = false;
+        }
+
+        public boolean isValid(long currentEpoch) {
+            return !revoked && currentEpoch <= expiryEpoch;
+        }
+
+        public void revoke() { revoked = true; }
+        public String getDigestHex() { return digestHex; }
+        public String getAttesterAddress() { return attesterAddress; }
+    }
+
+    public static final class AttestationRelay {
+        private final HiveRuntimeConfig config;
+        private final Map<String, AttestationRecord> records = new ConcurrentHashMap<>();
+
+        public AttestationRelay(HiveRuntimeConfig config) {
+            this.config = config;
+        }
+
+        public void attest(String digestHex, String attesterAddress, long currentEpoch) {
+            long expiry = currentEpoch + (ATTESTATION_TTL_SECONDS / 12L);
+            records.put(digestHex.toLowerCase(Locale.ROOT), new AttestationRecord(digestHex, attesterAddress, expiry));
+        }
+
+        public boolean verify(String digestHex, long currentEpoch) {
+            AttestationRecord rec = records.get(digestHex.toLowerCase(Locale.ROOT));
+            return rec != null && rec.isValid(currentEpoch);
+        }
+
+        public int countActive(long currentEpoch) {
+            return (int) records.values().stream().filter(r -> r.isValid(currentEpoch)).count();
+        }
+
+        public Map<String, Object> buildRelayEnvelope(String digestHex) {
+            Map<String, Object> env = new LinkedHashMap<>();
+            env.put("digest", digestHex);
+            env.put("chainId", config.getChainId());
+            env.put("relay", config.getRelayAddress());
+            env.put("sink", config.getAttestationSinkAddress());
+            env.put("oracle", config.getNectarOracleAddress());
+            env.put("domain", config.getSwarmDomainHex());
+            return env;
+        }
+    }
+
+    // --- Metrics ring ---
+
+    public static final class HiveMetricsRing {
+        private final int capacity;
+        private final CopyOnWriteArrayList<Map<String, Object>> samples = new CopyOnWriteArrayList<>();
+        private final Map<String, AtomicLong> gauges = new ConcurrentHashMap<>();
+
+        public HiveMetricsRing(int capacity) {
+            this.capacity = Math.max(64, capacity);
+        }
+
+        public void recordGauge(String name, long value) {
+            gauges.computeIfAbsent(name, k -> new AtomicLong()).set(value);
