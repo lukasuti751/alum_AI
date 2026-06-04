@@ -702,3 +702,67 @@ def emit_pheromone() -> str:
         }
     }
 
+    public static final class PheromoneTrailIndex {
+        private final int capacity;
+        private final AtomicLong idSeq = new AtomicLong(0L);
+        private final Map<Long, PheromoneTrail> trails = new ConcurrentHashMap<>();
+        private final Map<Long, List<Long>> outboundByNode = new ConcurrentHashMap<>();
+
+        public PheromoneTrailIndex(int capacity) {
+            this.capacity = Math.max(1, capacity);
+        }
+
+        public int size() { return trails.size(); }
+
+        public long layTrail(long sourceNodeId, long targetNodeId, String signalDigest, int intensity, long expiryEpoch) {
+            if (trails.size() >= capacity) {
+                throw new AlumHive_CapacityExceededException("pheromone trails");
+            }
+            long id = idSeq.incrementAndGet();
+            PheromoneTrail trail = new PheromoneTrail(id, sourceNodeId, targetNodeId, signalDigest, intensity, expiryEpoch);
+            trails.put(id, trail);
+            outboundByNode.computeIfAbsent(sourceNodeId, k -> new CopyOnWriteArrayList<>()).add(id);
+            return id;
+        }
+
+        public PheromoneTrail requireTrail(long trailId) {
+            PheromoneTrail t = trails.get(trailId);
+            if (t == null) {
+                throw new AlumHive_NotFoundException("trail:" + trailId);
+            }
+            return t;
+        }
+
+        public List<PheromoneTrail> outboundFrom(long nodeId, long currentEpoch) {
+            List<Long> ids = outboundByNode.getOrDefault(nodeId, List.of());
+            return ids.stream()
+                    .map(trails::get)
+                    .filter(Objects::nonNull)
+                    .filter(t -> !t.isExpired(currentEpoch))
+                    .sorted(Comparator.comparingInt(PheromoneTrail::getIntensity).reversed())
+                    .collect(Collectors.toList());
+        }
+
+        public void evaporateExpired(long currentEpoch) {
+            for (PheromoneTrail t : trails.values()) {
+                if (t.isExpired(currentEpoch) && !t.isEvaporated()) {
+                    t.evaporate();
+                }
+            }
+        }
+
+        public int activeTrailCount(long currentEpoch) {
+            return (int) trails.values().stream().filter(t -> !t.isExpired(currentEpoch)).count();
+        }
+    }
+'''
+
+
+def emit_consensus() -> str:
+    return '''
+    // --- Consensus mesh (quorum ballots) ---
+
+    public enum QuorumRoundStatus {
+        OPEN, TALLYING, REACHED, FAILED, SEALED
+    }
+
