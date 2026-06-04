@@ -1278,3 +1278,67 @@ def emit_support_classes() -> str:
         }
 
         public String renderQuorumSummary(List<QuorumBallot> ballots) {
+            StringWriter sw = new StringWriter();
+            PrintWriter pw = new PrintWriter(sw);
+            pw.println("=== quorum rounds ===");
+            for (QuorumBallot b : ballots) {
+                pw.println("  round " + b.getRoundId() + " status=" + b.getStatus()
+                        + " weight=" + b.getAccumulatedWeight() + "/" + b.getRequiredWeight());
+            }
+            pw.flush();
+            return sw.toString();
+        }
+    }
+'''
+
+
+def emit_utilities_and_cli() -> str:
+    return f'''
+    // --- Utility helpers ---
+
+    public static byte[] sha256Bytes(byte[] input) {{
+        try {{
+            MessageDigest md = MessageDigest.getInstance(DIGEST_ALGORITHM);
+            return md.digest(input == null ? new byte[0] : input);
+        }} catch (NoSuchAlgorithmException e) {{
+            throw new AlumHive_DigestFailureException(e);
+        }}
+    }}
+
+    public static String sha256Hex(String input) {{
+        byte[] digest = sha256Bytes(input == null ? null : input.getBytes(StandardCharsets.UTF_8));
+        return "0x" + HexFormat.of().formatHex(digest);
+    }}
+
+    public long computeRewardUnits(long baseUnits) {{
+        return BigDecimal.valueOf(baseUnits)
+                .multiply(BigDecimal.valueOf(REWARD_BASIS_POINTS))
+                .divide(BigDecimal.valueOf(BPS_DENOM), 0, RoundingMode.FLOOR)
+                .longValue();
+    }}
+
+    public double computeSwarmCohesionScore() {{
+        int activeNodes = (int) nodes().snapshot().values().stream()
+                .filter(n -> n.getStatus() != SwarmNodeStatus.RETIRED)
+                .count();
+        int activeTrails = trails().activeTrailCount(currentHiveEpoch());
+        int readyThoughts = thoughts().listConsensusReady().size();
+        double nodeFactor = Math.min(0.4, activeNodes * 0.008);
+        double trailFactor = Math.min(0.35, activeTrails * 0.004);
+        double thoughtFactor = Math.min(0.25, readyThoughts * 0.02);
+        return Math.min(1.0, nodeFactor + trailFactor + thoughtFactor);
+    }}
+
+    public Map<String, Object> buildAttestationManifest(long roundId) {{
+        QuorumBallot ballot = quorum().requireRound(roundId);
+        Map<String, Object> manifest = new LinkedHashMap<>();
+        manifest.put("roundId", roundId);
+        manifest.put("proposal", ballot.getProposalDigest());
+        manifest.put("chainId", runtimeConfig.getChainId());
+        manifest.put("hiveKeeper", runtimeConfig.getHiveKeeperAddress());
+        manifest.put("marshal", runtimeConfig.getSwarmMarshalAddress());
+        manifest.put("oracle", runtimeConfig.getNectarOracleAddress());
+        manifest.put("sink", runtimeConfig.getAttestationSinkAddress());
+        manifest.put("quorumAnchor", QUORUM_ANCHOR_HEX);
+        manifest.put("status", ballot.getStatus().name());
+        manifest.put("hiveDigest", computeHiveDigest("manifest", String.valueOf(roundId), null));
