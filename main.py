@@ -510,3 +510,67 @@ def emit_swarm_node_registry() -> str:
             return nodes.values().stream()
                     .filter(n -> n.getStatus() != SwarmNodeStatus.RETIRED && n.getStatus() != SwarmNodeStatus.QUARANTINED)
                     .mapToInt(SwarmNode::getComputeWeight)
+                    .sum();
+        }
+    }
+'''
+
+
+def emit_thought_pool() -> str:
+    return '''
+    // --- Thought pool (shared cognition fragments) ---
+
+    public enum ThoughtPhase {
+        RAW, REFINED, CONSENSUS_READY, ARCHIVED
+    }
+
+    public static final class ThoughtFragment {
+        private final long thoughtId;
+        private final String swarmTag;
+        private final String contentDigest;
+        private final String authorAddress;
+        private final Instant depositedAt;
+        private ThoughtPhase phase;
+        private int refinementScore;
+        private final List<Long> upstreamThoughtIds;
+
+        public ThoughtFragment(
+                long thoughtId,
+                String swarmTag,
+                String contentDigest,
+                String authorAddress,
+                List<Long> upstreamThoughtIds
+        ) {
+            this.thoughtId = thoughtId;
+            this.swarmTag = swarmTag == null ? "default" : swarmTag;
+            this.contentDigest = contentDigest == null ? "" : contentDigest;
+            this.authorAddress = authorAddress;
+            this.depositedAt = Instant.now();
+            this.phase = ThoughtPhase.RAW;
+            this.refinementScore = 0;
+            this.upstreamThoughtIds = upstreamThoughtIds == null
+                    ? new ArrayList<>()
+                    : new ArrayList<>(upstreamThoughtIds);
+        }
+
+        public long getThoughtId() { return thoughtId; }
+        public String getSwarmTag() { return swarmTag; }
+        public String getContentDigest() { return contentDigest; }
+        public String getAuthorAddress() { return authorAddress; }
+        public Instant getDepositedAt() { return depositedAt; }
+        public ThoughtPhase getPhase() { return phase; }
+        public int getRefinementScore() { return refinementScore; }
+        public List<Long> getUpstreamThoughtIds() { return Collections.unmodifiableList(upstreamThoughtIds); }
+
+        void advancePhase(ThoughtPhase next) { this.phase = next; }
+        void addRefinement(int delta) { this.refinementScore = Math.min(1000, refinementScore + delta); }
+
+        public Map<String, Object> toMap() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("thoughtId", thoughtId);
+            m.put("swarmTag", swarmTag);
+            m.put("digest", contentDigest);
+            m.put("author", authorAddress);
+            m.put("phase", phase.name());
+            m.put("refinement", refinementScore);
+            m.put("upstream", upstreamThoughtIds);
