@@ -1406,3 +1406,67 @@ def emit_utilities_and_cli() -> str:
         if (args.length == 0) {{
             printUsage();
             engine.seedDemoHive();
+            System.out.println(engine.reports().renderHealth(engine.buildHealthSnapshot()));
+            return;
+        }}
+        String cmd = args[0].toLowerCase(Locale.ROOT);
+        switch (cmd) {{
+            case "health" -> System.out.println(engine.reports().renderHealth(engine.buildHealthSnapshot()));
+            case "seed" -> {{
+                engine.seedDemoHive();
+                System.out.println("Demo hive seeded.");
+            }}
+            case "nodes" -> engine.exportSwarmCatalog().forEach(row -> System.out.println(row));
+            case "quorum" -> System.out.println(engine.reports().renderQuorumSummary(engine.quorum().listOpen()));
+            case "cohesion" -> System.out.println("cohesion=" + engine.computeSwarmCohesionScore());
+            case "ledger" -> {{
+                int limit = 20;
+                if (args.length > 1) limit = Integer.parseInt(args[1]);
+                engine.ledger().tail(limit).forEach(ev -> System.out.println(ev.toMap()));
+            }}
+            case "thought" -> {{
+                if (args.length < 2) {{
+                    System.err.println("usage: thought <id>");
+                    return;
+                }}
+                System.out.println(engine.summarizeThoughtLineage(Long.parseLong(args[1])));
+            }}
+            case "manifest" -> {{
+                if (args.length < 2) {{
+                    System.err.println("usage: manifest <roundId>");
+                    return;
+                }}
+                System.out.println(engine.buildAttestationManifest(Long.parseLong(args[1])));
+            }}
+            case "repl" -> runRepl(engine);
+            default -> printUsage();
+        }}
+    }}
+
+    private static void printUsage() {{
+        System.out.println("alum__AI commands: health | seed | nodes | quorum | cohesion | ledger [n] | thought <id> | manifest <roundId> | repl");
+    }}
+
+    private static void runRepl(alum__AI engine) throws IOException {{
+        BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+        System.out.println("alum__AI repl — type help or quit");
+        String line;
+        while ((line = reader.readLine()) != null) {{
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) continue;
+            if ("quit".equalsIgnoreCase(trimmed) || "exit".equalsIgnoreCase(trimmed)) break;
+            if ("help".equalsIgnoreCase(trimmed)) {{
+                printUsage();
+                continue;
+            }}
+            String[] parts = trimmed.split("\\\\s+");
+            try {{
+                main(parts);
+            }} catch (Exception ex) {{
+                System.err.println("error: " + ex.getMessage());
+            }}
+        }}
+    }}
+'''
+
+
