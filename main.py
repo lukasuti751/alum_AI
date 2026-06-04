@@ -1342,3 +1342,67 @@ def emit_utilities_and_cli() -> str:
         manifest.put("quorumAnchor", QUORUM_ANCHOR_HEX);
         manifest.put("status", ballot.getStatus().name());
         manifest.put("hiveDigest", computeHiveDigest("manifest", String.valueOf(roundId), null));
+        return manifest;
+    }}
+
+    public List<Map<String, Object>> exportSwarmCatalog() {{
+        List<Map<String, Object>> catalog = new ArrayList<>();
+        for (SwarmNode node : nodes().snapshot().values()) {{
+            catalog.add(node.toMap());
+        }}
+        return catalog;
+    }}
+
+    public void seedDemoHive() {{
+        requireActiveGrid();
+        long scout = nodes().enlist("scout-alpha", ADDRESS_F, SwarmNodeTier.SCOUT, 8);
+        long worker = nodes().enlist("worker-beta", ADDRESS_G, SwarmNodeTier.WORKER, 16);
+        long synth = nodes().enlist("synth-gamma", ADDRESS_H, SwarmNodeTier.SYNTHESIZER, 24);
+        String digestA = sha256Hex("hive-thought-alpha");
+        String digestB = sha256Hex("hive-thought-beta");
+        long thoughtA = thoughts().deposit("nectar-lane", digestA, ADDRESS_F, List.of());
+        long thoughtB = thoughts().deposit("nectar-lane", digestB, ADDRESS_G, List.of(thoughtA));
+        thoughts().refine(thoughtA, 200);
+        thoughts().refine(thoughtB, 500);
+        nodes().requireNode(worker).bindThought(thoughtB);
+        long epoch = tickHiveEpoch();
+        trails().layTrail(scout, worker, sha256Hex("signal-route-1"), 180, epoch + 48);
+        trails().layTrail(worker, synth, sha256Hex("signal-route-2"), 220, epoch + 72);
+        long round = quorum().openRound(digestB, ADDRESS_A, 28);
+        quorum().castVote(round, ADDRESS_G, 16, nodes());
+        quorum().castVote(round, ADDRESS_H, 24, nodes());
+        if (quorum().requireRound(round).getStatus() == QuorumRoundStatus.REACHED) {{
+            quorum().sealRound(round);
+        }}
+        spores().store("demo-lineage", digestB, ADDRESS_E, thoughtB);
+        scheduler().enqueue(digestA, worker, ADDRESS_D, 5);
+        attestation().attest(digestB, ADDRESS_C, epoch);
+        hiveLedger.append(new HiveEvent("DemoSeeded", ADDRESS_A, epoch, Instant.now(), Map.of("round", round)));
+        hiveMetricsRing.recordCounter("demoRuns", 1L);
+    }}
+
+    public String summarizeThoughtLineage(long thoughtId) {{
+        ThoughtFragment frag = thoughts().requireThought(thoughtId);
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        pw.println("Thought " + thoughtId);
+        pw.println("  tag: " + frag.getSwarmTag());
+        pw.println("  digest: " + frag.getContentDigest());
+        pw.println("  phase: " + frag.getPhase());
+        pw.println("  refinement: " + frag.getRefinementScore());
+        pw.println("  upstream: " + frag.getUpstreamThoughtIds());
+        pw.flush();
+        return sw.toString();
+    }}
+
+    public Duration uptimeSinceBoot() {{
+        return Duration.between(bootInstant, Instant.now());
+    }}
+
+    // --- CLI entry ---
+
+    public static void main(String[] args) throws IOException {{
+        alum__AI engine = bootstrapDefault();
+        if (args.length == 0) {{
+            printUsage();
+            engine.seedDemoHive();
