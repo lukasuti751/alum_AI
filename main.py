@@ -1022,3 +1022,67 @@ def emit_scheduler() -> str:
         public Instant getEnqueuedAt() { return enqueuedAt; }
         public SwarmTaskStatus getStatus() { return status; }
         public Instant getCompletedAt() { return completedAt; }
+
+        void dispatch() { status = SwarmTaskStatus.DISPATCHED; }
+        void complete() { status = SwarmTaskStatus.COMPLETED; completedAt = Instant.now(); }
+        void abort() { status = SwarmTaskStatus.ABORTED; }
+
+        public Map<String, Object> toMap() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("taskId", taskId);
+            m.put("digest", taskDigest);
+            m.put("nodeId", assignedNodeId);
+            m.put("requester", requesterAddress);
+            m.put("priority", priority);
+            m.put("status", status.name());
+            return m;
+        }
+    }
+
+    public static final class SwarmScheduler {
+        private final int capacity;
+        private final AtomicLong idSeq = new AtomicLong(0L);
+        private final Map<Long, SwarmTask> tasks = new ConcurrentHashMap<>();
+
+        public SwarmScheduler(int capacity) {
+            this.capacity = Math.max(1, capacity);
+        }
+
+        public int pendingCount() {
+            return (int) tasks.values().stream()
+                    .filter(t -> t.getStatus() == SwarmTaskStatus.QUEUED || t.getStatus() == SwarmTaskStatus.DISPATCHED)
+                    .count();
+        }
+
+        public long enqueue(String taskDigest, long nodeId, String requesterAddress, int priority) {
+            if (tasks.size() >= capacity) {
+                throw new AlumHive_CapacityExceededException("task queue");
+            }
+            long id = idSeq.incrementAndGet();
+            tasks.put(id, new SwarmTask(id, taskDigest, nodeId, requesterAddress, priority));
+            return id;
+        }
+
+        public SwarmTask requireTask(long taskId) {
+            SwarmTask t = tasks.get(taskId);
+            if (t == null) {
+                throw new AlumHive_NotFoundException("task:" + taskId);
+            }
+            return t;
+        }
+
+        public void dispatch(long taskId) {
+            requireTask(taskId).dispatch();
+        }
+
+        public void complete(long taskId) {
+            requireTask(taskId).complete();
+        }
+
+        public List<SwarmTask> listQueued() {
+            return tasks.values().stream()
+                    .filter(t -> t.getStatus() == SwarmTaskStatus.QUEUED)
+                    .sorted(Comparator.comparingInt(SwarmTask::getPriority).reversed())
+                    .collect(Collectors.toList());
+        }
+    }
