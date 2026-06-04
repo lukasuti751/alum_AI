@@ -894,3 +894,67 @@ def emit_spore_vault() -> str:
     // --- Memory spore vault ---
 
     public static final class SporeFragment {
+        private final long sporeId;
+        private final String lineageTag;
+        private final String payloadDigest;
+        private final String depositorAddress;
+        private final long boundThoughtId;
+        private final Instant storedAt;
+        private boolean propagated;
+
+        public SporeFragment(
+                long sporeId,
+                String lineageTag,
+                String payloadDigest,
+                String depositorAddress,
+                long boundThoughtId
+        ) {
+            this.sporeId = sporeId;
+            this.lineageTag = lineageTag == null ? "root" : lineageTag;
+            this.payloadDigest = payloadDigest == null ? "" : payloadDigest;
+            this.depositorAddress = depositorAddress;
+            this.boundThoughtId = boundThoughtId;
+            this.storedAt = Instant.now();
+            this.propagated = false;
+        }
+
+        public long getSporeId() { return sporeId; }
+        public String getLineageTag() { return lineageTag; }
+        public String getPayloadDigest() { return payloadDigest; }
+        public String getDepositorAddress() { return depositorAddress; }
+        public long getBoundThoughtId() { return boundThoughtId; }
+        public Instant getStoredAt() { return storedAt; }
+        public boolean isPropagated() { return propagated; }
+
+        void markPropagated() { this.propagated = true; }
+
+        public Map<String, Object> toMap() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("sporeId", sporeId);
+            m.put("lineage", lineageTag);
+            m.put("digest", payloadDigest);
+            m.put("depositor", depositorAddress);
+            m.put("thoughtId", boundThoughtId);
+            m.put("propagated", propagated);
+            return m;
+        }
+    }
+
+    public static final class MemorySporeVault {
+        private final int capacity;
+        private final AtomicLong idSeq = new AtomicLong(0L);
+        private final Map<Long, SporeFragment> spores = new ConcurrentHashMap<>();
+
+        public MemorySporeVault(int capacity) {
+            this.capacity = Math.max(1, capacity);
+        }
+
+        public int size() { return spores.size(); }
+
+        public long store(String lineageTag, String payloadDigest, String depositorAddress, long boundThoughtId) {
+            if (spores.size() >= capacity) {
+                throw new AlumHive_CapacityExceededException("spore vault");
+            }
+            long id = idSeq.incrementAndGet();
+            spores.put(id, new SporeFragment(id, lineageTag, payloadDigest, depositorAddress, boundThoughtId));
+            return id;
