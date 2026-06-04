@@ -1214,3 +1214,67 @@ def emit_support_classes() -> str:
 
         public void recordGauge(String name, long value) {
             gauges.computeIfAbsent(name, k -> new AtomicLong()).set(value);
+            Map<String, Object> sample = new LinkedHashMap<>();
+            sample.put("name", name);
+            sample.put("value", value);
+            sample.put("at", Instant.now().toString());
+            samples.add(sample);
+            while (samples.size() > capacity) {
+                samples.remove(0);
+            }
+        }
+
+        public void recordCounter(String name, long delta) {
+            gauges.computeIfAbsent(name, k -> new AtomicLong()).addAndGet(delta);
+        }
+
+        public int sampleCount() { return samples.size(); }
+
+        public Map<String, Long> gaugeSnapshot() {
+            Map<String, Long> snap = new LinkedHashMap<>();
+            gauges.forEach((k, v) -> snap.put(k, v.get()));
+            return snap;
+        }
+    }
+
+    // --- Validator ---
+
+    public static final class HiveValidator {
+        public void requireHiveKeeper(String actor, String expected) {
+            requireAddressMatch(actor, expected);
+        }
+
+        public void requireSwarmMarshal(String actor, String expected) {
+            requireAddressMatch(actor, expected);
+        }
+
+        public void requireAddressMatch(String actor, String expected) {
+            if (actor == null || expected == null || !actor.equalsIgnoreCase(expected)) {
+                throw new AlumHive_UnauthorizedException("role mismatch");
+            }
+        }
+
+        public void requireValidAddress(String addr) {
+            if (addr == null || addr.isBlank() || !addr.startsWith("0x") || addr.length() != 42) {
+                throw new AlumHive_InvalidAddressException(String.valueOf(addr));
+            }
+        }
+    }
+
+    // --- Report emitter ---
+
+    public static final class HiveReportEmitter {
+        private static final DateTimeFormatter UTC_FMT =
+                DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'").withZone(ZoneOffset.UTC);
+
+        public String renderHealth(Map<String, Object> snapshot) {
+            StringWriter sw = new StringWriter();
+            PrintWriter pw = new PrintWriter(sw);
+            pw.println("=== alum__AI hive health ===");
+            snapshot.forEach((k, v) -> pw.println("  " + k + ": " + v));
+            pw.println("  generated: " + UTC_FMT.format(Instant.now()));
+            pw.flush();
+            return sw.toString();
+        }
+
+        public String renderQuorumSummary(List<QuorumBallot> ballots) {
