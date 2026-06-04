@@ -1086,3 +1086,67 @@ def emit_scheduler() -> str:
                     .collect(Collectors.toList());
         }
     }
+'''
+
+
+def emit_support_classes() -> str:
+    return '''
+    // --- Hive ledger ---
+
+    public static final class HiveEvent {
+        private final String kind;
+        private final String actorAddress;
+        private final long hiveEpoch;
+        private final Instant recordedAt;
+        private final Map<String, Object> metadata;
+
+        public HiveEvent(String kind, String actorAddress, long hiveEpoch, Instant recordedAt, Map<String, Object> metadata) {
+            this.kind = kind;
+            this.actorAddress = actorAddress;
+            this.hiveEpoch = hiveEpoch;
+            this.recordedAt = recordedAt;
+            this.metadata = metadata == null ? Map.of() : Map.copyOf(metadata);
+        }
+
+        public String getKind() { return kind; }
+        public String getActorAddress() { return actorAddress; }
+        public long getHiveEpoch() { return hiveEpoch; }
+        public Instant getRecordedAt() { return recordedAt; }
+        public Map<String, Object> getMetadata() { return metadata; }
+
+        public Map<String, Object> toMap() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("kind", kind);
+            m.put("actor", actorAddress);
+            m.put("epoch", hiveEpoch);
+            m.put("at", recordedAt.toString());
+            m.put("meta", metadata);
+            return m;
+        }
+    }
+
+    public static final class HiveLedger {
+        private final CopyOnWriteArrayList<HiveEvent> events = new CopyOnWriteArrayList<>();
+
+        public void append(HiveEvent event) {
+            events.add(event);
+        }
+
+        public List<HiveEvent> tail(int limit) {
+            int size = events.size();
+            int from = Math.max(0, size - limit);
+            return new ArrayList<>(events.subList(from, size));
+        }
+
+        public int size() { return events.size(); }
+    }
+
+    // --- Attestation relay ---
+
+    public static final class AttestationRecord {
+        private final String digestHex;
+        private final String attesterAddress;
+        private final Instant attestedAt;
+        private final long expiryEpoch;
+        private boolean revoked;
+
