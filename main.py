@@ -766,3 +766,67 @@ def emit_consensus() -> str:
         OPEN, TALLYING, REACHED, FAILED, SEALED
     }
 
+    public static final class QuorumBallot {
+        private final long roundId;
+        private final String proposalDigest;
+        private final String proposerAddress;
+        private final int requiredWeight;
+        private final Instant openedAt;
+        private QuorumRoundStatus status;
+        private final Map<String, Integer> votesByAddress;
+        private int accumulatedWeight;
+
+        public QuorumBallot(long roundId, String proposalDigest, String proposerAddress, int requiredWeight) {
+            this.roundId = roundId;
+            this.proposalDigest = proposalDigest;
+            this.proposerAddress = proposerAddress;
+            this.requiredWeight = Math.max(MIN_QUORUM_WEIGHT, requiredWeight);
+            this.openedAt = Instant.now();
+            this.status = QuorumRoundStatus.OPEN;
+            this.votesByAddress = new ConcurrentHashMap<>();
+            this.accumulatedWeight = 0;
+        }
+
+        public long getRoundId() { return roundId; }
+        public String getProposalDigest() { return proposalDigest; }
+        public String getProposerAddress() { return proposerAddress; }
+        public int getRequiredWeight() { return requiredWeight; }
+        public Instant getOpenedAt() { return openedAt; }
+        public QuorumRoundStatus getStatus() { return status; }
+        public int getAccumulatedWeight() { return accumulatedWeight; }
+
+        void castVote(String voterAddress, int weight) {
+            if (status != QuorumRoundStatus.OPEN) {
+                throw new IllegalStateException("AlumHive: round not open");
+            }
+            votesByAddress.merge(voterAddress, weight, Integer::sum);
+            accumulatedWeight += weight;
+            if (accumulatedWeight >= requiredWeight) {
+                status = QuorumRoundStatus.REACHED;
+            }
+        }
+
+        void seal() { status = QuorumRoundStatus.SEALED; }
+        void fail() { status = QuorumRoundStatus.FAILED; }
+
+        public Map<String, Object> toMap() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("roundId", roundId);
+            m.put("proposal", proposalDigest);
+            m.put("proposer", proposerAddress);
+            m.put("required", requiredWeight);
+            m.put("accumulated", accumulatedWeight);
+            m.put("status", status.name());
+            m.put("votes", votesByAddress.size());
+            return m;
+        }
+    }
+
+    public static final class ConsensusMesh {
+        private final int capacity;
+        private final int minWeight;
+        private final int maxWeight;
+        private final AtomicLong idSeq = new AtomicLong(0L);
+        private final Map<Long, QuorumBallot> rounds = new ConcurrentHashMap<>();
+
+        public ConsensusMesh(int capacity, int minWeight, int maxWeight) {
